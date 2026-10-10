@@ -52,8 +52,8 @@ class _TestRepairScreenState extends State<TestRepairScreen> {
     });
 
     final success = await ApiService.createTicket(
-      scannedDevice!['device_id'],
-      'จอภาพดับ เปิดเครื่องไม่ติด (ทดสอบส่งจากแอป Flutter)',
+      deviceId: scannedDevice!['device_id'],
+      description: 'จอภาพดับ เปิดเครื่องไม่ติด (ทดสอบส่งจากแอป Flutter)',
     );
 
     setState(() {
