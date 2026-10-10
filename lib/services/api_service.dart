@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Base URL จาก render
+  // Base URL จาก ngrok
   static const String baseUrl = 'https://repair-device-api.onrender.com/api';
 
   // 1. สแกน QR Code ค้นหาอุปกรณ์ (เช่น PC-SC2-307-01)
