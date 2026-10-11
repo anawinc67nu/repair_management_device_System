@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/login_services.dart';
 import '../../staff_tickets/screens/ticket_list_screen.dart';
+import '../../../services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,36 +17,71 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _hidePassword = true;
   bool _isLoading = false;
 
-  void _login() {
-    setState(() {
-      _isLoading = true;
-    });
-
-    final role = MockAuthService.login(
-      _emailController.text,
-      _passwordController.text,
-    );
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (role == null) {
+  Future<void> _login() async {
+    // 1. ตรวจสอบข้อมูลก่อนส่ง
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('อีเมลหรือรหัสผ่านไม่ถูกต้อง')),
+        const SnackBar(content: Text('กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน')),
       );
       return;
     }
 
-    // นำทางตามบทบาทที่ตรวจสอบได้
-    final destination = role == 'staff'
-        ? const TicketListScreen()
-        : const UserHomeScreen();
+    setState(() {
+      _isLoading = true;
+    });
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => destination),
-    );
+    try {
+      // 2. เรียกใช้งาน API จริงจาก ApiService ที่คุณสร้างไว้
+      final result = await ApiService.login(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+
+      // 3. ป้องกันปัญหา Async Gap (เช็คว่า Widget ยังอยู่บนจอไหมหลังรอ Response)
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      // 4. ถ้าผลลัพธ์เป็น null แสดงว่า Login ไม่ผ่าน (รหัสผิด หรือเชื่อมต่อไม่ได้)
+      if (result == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('อีเมลหรือรหัสผ่านไม่ถูกต้อง')),
+        );
+        return;
+      }
+
+      // 5. แกะข้อมูล Role จาก Response ของ API
+      // (ปรับ Key ให้ตรงกับโครงสร้าง JSON จริงฝั่ง Backend ของคุณ เช่น result['role'] หรือ result['user']['role'])
+      final userData = result['user'] ?? result;
+      final role = userData['role'];
+
+      // (ทางเลือกเสริม) หากคุณต้องการเก็บบันทึก Token ไว้ใช้ต่อในหน้าอื่น
+      // final token = result['token'];
+      // TODO: บันทึก token ลง SharedPreferences หรือ SecureStorage
+
+      // 6. นำทางไปยังหน้าตามบทบาท
+      final destination = (role == 'staff' || role == 'admin')
+          ? const TicketListScreen() // หน้าของช่าง/เจ้าหน้าที่
+          : const UserHomeScreen(); // หน้าของผู้ใช้งานทั่วไป
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => destination),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
+    }
   }
 
   @override

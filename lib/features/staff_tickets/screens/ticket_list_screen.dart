@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/repair_ticket.dart';
-import '../services/ticket_service.dart';
+import '../../../services/api_service.dart'; // เปลี่ยนมาใช้ ApiService แทน TicketService
 import 'ticket_detail_screen.dart';
 
 class TicketListScreen extends StatefulWidget {
@@ -14,11 +14,56 @@ class _TicketListScreenState extends State<TicketListScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   RepairStatus? _selectedStatus;
+  List<RepairTicket> _allTickets = []; // เก็บรายการทั้งหมดจาก API
+  bool _isLoading = true; // สถานะกำลังโหลด
 
+  @override
+  void initState() {
+    super.initState();
+    _fetchTickets();
+  }
+
+  // ฟังก์ชันดึงข้อมูลจาก API จริง
+  Future<void> _fetchTickets() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final data = await ApiService.getTickets();
+
+      if (!mounted) return;
+
+      if (data != null) {
+        // แปลงข้อมูล JSON List เป็น Model RepairTicket
+        // (ตรวจสอบชื่อ Key ใน fromJson ให้ตรงกับโครงสร้าง Backend ของคุณ)
+        setState(() {
+          _allTickets = data
+              .map((json) => RepairTicket.fromJson(json))
+              .toList();
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('เกิดข้อผิดพลาดในการโหลดข้อมูล: $e')),
+      );
+    }
+  }
+
+  // ฟังก์ชันสำหรับกรองข้อมูล (Search & Status Filter)
   List<RepairTicket> get _filteredTickets {
     final keyword = _searchController.text.toLowerCase().trim();
 
-    return TicketService.getTickets().where((ticket) {
+    return _allTickets.where((ticket) {
       final matchesSearch =
           ticket.id.toLowerCase().contains(keyword) ||
           ticket.customerName.toLowerCase().contains(keyword) ||
@@ -73,7 +118,15 @@ class _TicketListScreenState extends State<TicketListScreen> {
     final tickets = _filteredTickets;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('รายการงานซ่อม')),
+      appBar: AppBar(
+        title: const Text('รายการงานซ่อม'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchTickets, // ปุ่มกดรีเฟรชข้อมูลจาก API
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -112,7 +165,9 @@ class _TicketListScreenState extends State<TicketListScreen> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: tickets.isEmpty
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : tickets.isEmpty
                 ? const Center(child: Text('ไม่พบรายการงานซ่อม'))
                 : ListView.builder(
                     padding: const EdgeInsets.all(12),
@@ -148,7 +203,6 @@ class _TicketListScreenState extends State<TicketListScreen> {
                             ),
                           ),
                           trailing: const Icon(Icons.chevron_right),
-
                           onTap: () async {
                             await Navigator.push(
                               context,
@@ -158,7 +212,8 @@ class _TicketListScreenState extends State<TicketListScreen> {
                               ),
                             );
 
-                            setState(() {});
+                            // เมื่อกลับมาจากหน้า Detail ให้รีโหลดข้อมูลใหม่เผื่อมีการเปลี่ยนสถานะ
+                            _fetchTickets();
                           },
                         ),
                       );

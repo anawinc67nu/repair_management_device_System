@@ -29,6 +29,41 @@ class RepairTicket {
     this.repairNotes = '',
   });
 
+  // แก้ไขตรงนี้: เปลี่ยนเป็น Factory Constructor สำหรับแปลง JSON
+  factory RepairTicket.fromJson(Map<String, dynamic> json) {
+    return RepairTicket(
+      id: json['id']?.toString() ?? '',
+      title: json['title'] ?? json['description'] ?? 'ไม่มีหัวข้อ',
+      description: json['description'] ?? '',
+      customerName: json['reporter']?['name'] ?? json['customerName'] ?? 'ไม่ระบุชื่อ',
+      deviceName: json['device']?['name'] ?? json['deviceName'] ?? 'ไม่ระบุอุปกรณ์',
+      createdAt: json['created_at'] != null 
+          ? DateTime.parse(json['created_at']) 
+          : DateTime.now(),
+      status: _parseStatus(json['status']),
+      assignedStaff: json['assigned_staff'] ?? json['assignedStaff'],
+      repairNotes: json['action_note'] ?? json['repairNotes'] ?? '',
+    );
+  }
+
+  // ฟังก์ชันช่วยแปลงข้อความสถานะจาก Backend ให้เป็น Enum
+  static RepairStatus _parseStatus(String? statusStr) {
+    switch (statusStr) {
+      case 'accepted':
+        return RepairStatus.accepted;
+      case 'in_progress':
+      case 'inProgress':
+        return RepairStatus.inProgress;
+      case 'completed':
+        return RepairStatus.completed;
+      case 'cancelled':
+        return RepairStatus.cancelled;
+      case 'pending':
+      default:
+        return RepairStatus.pending;
+    }
+  }
+
   RepairTicket copyWith({
     RepairStatus? status,
     String? assignedStaff,
