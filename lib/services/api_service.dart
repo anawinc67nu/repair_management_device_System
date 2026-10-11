@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Base URL บน Render (ตัด /api ออกเพื่อให้เรียก path ได้ชัดเจน)
+  // Base URL บน Render
   static const String baseUrl = 'https://repair-device-api.onrender.com/api';
 
   // Header มาตรฐาน
@@ -153,23 +153,89 @@ class ApiService {
     }
   }
 
-  // 4. ช่างปิดงาน/อัปเดตสถานะ (R5 - แจ้งเตือนเข้า LINE ผู้แจ้งอัตโนมัติ)
-  static Future<bool> completeTicket(int ticketId, String actionNote) async {
+  // 4. ดึงรายการแจ้งซ่อมทั้งหมด (สำหรับช่าง/แอดมิน)
+  static Future<List<dynamic>?> getTickets() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/tickets'),
+        headers: _headers,
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          return data;
+        } else if (data is Map && data.containsKey('tickets')) {
+          return data['tickets'];
+        }
+      }
+    } catch (e) {
+      print('Get Tickets Error: $e');
+    }
+    return null;
+  }
+
+  // 4.1 ดึงรายการแจ้งซ่อมตาม ID ผู้ใช้ (สำหรับหน้า "ประวัติของฉัน")
+  static Future<List<dynamic>?> getUserTickets(int userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/tickets/user/$userId'),
+        headers: _headers,
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          return data;
+        } else if (data is Map && data.containsKey('tickets')) {
+          return data['tickets'];
+        }
+      }
+    } catch (e) {
+      print('Get User Tickets Error: $e');
+    }
+    return null;
+  }
+
+  // 4.2 ช่างอัปเดตเฉพาะสถานะงาน (เช่น 'in_progress', 'pending')
+  static Future<bool> updateTicketStatus(int ticketId, String status) async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$baseUrl/tickets/$ticketId/status'),
+        headers: _headers,
+        body: jsonEncode({'status': status}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Update Ticket Status Error: $e');
+      return false;
+    }
+  }
+
+  // 4.3 ช่างบันทึกผลการซ่อมพร้อมเปลี่ยนสถานะ
+  static Future<bool> saveRepairAction(int ticketId, String status, String actionNote) async {
     try {
       final response = await http.patch(
         Uri.parse('$baseUrl/tickets/$ticketId/status'),
         headers: _headers,
         body: jsonEncode({
-          'status': 'completed',
+          'status': status,
           'action_note': actionNote,
         }),
       );
       return response.statusCode == 200;
     } catch (e) {
-      print('Complete Ticket Error: $e');
+      print('Save Repair Action Error: $e');
       return false;
     }
   }
+
+  // 4.4 ช่างปิดงานซ่อม (R5 - สำเร็จและยิงเตือนเข้า LINE ผู้แจ้ง)
+  static Future<bool> completeTicket(int ticketId, String actionNote) async {
+    return saveRepairAction(ticketId, 'completed', actionNote);
+  }
+
+  // ==========================================
+  // แดชบอร์ดสรุปผล (Dashboard)
+  // ==========================================
 
   // 5. สถิติ Dashboard สำหรับแอดมิน (R3)
   static Future<Map<String, dynamic>?> getDashboardStats() async {
