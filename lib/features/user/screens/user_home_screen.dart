@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../services/api_service.dart';
 
 class UserHomeScreen extends StatefulWidget {
@@ -16,7 +17,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   final detailController = TextEditingController();
   final locationController = TextEditingController();
 
-  // กำหนด userId ของผู้ใช้งาน (สามารถปรับเปลี่ยนตามระบบ Auth/Session จริงได้)
+  List<dynamic> deviceList = [];
+  String? selectedRoomDeviceId;
+
+  // กำหนด userId ของผู้ใช้งาน
   final int currentUserId = 1;
 
   List<Map<String, dynamic>> repairHistory = [];
@@ -41,6 +45,35 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     fetchRepairHistory();
   }
 
+  // ดึงข้อมูลอุปกรณ์จริงในห้องผ่าน API
+  Future<void> fetchDevicesInRoom(String scannedRoomCode) async {
+    setState(() {
+      isLoading = true;
+      deviceList = [];
+      selectedRoomDeviceId = null;
+    });
+
+    try {
+      final result = await ApiService.getRoomEquipments(scannedRoomCode);
+
+      if (result != null && result['equipments'] != null) {
+        setState(() {
+          deviceList = List<dynamic>.from(result['equipments']);
+        });
+      } else {
+        showMessage('ไม่พบข้อมูลอุปกรณ์ในห้องนี้');
+      }
+    } catch (e) {
+      showMessage('เกิดข้อผิดพลาดในการดึงข้อมูลอุปกรณ์: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
     deviceIdController.dispose();
@@ -56,7 +89,27 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  // ดึงประวัติการแจ้งซ่อมของผู้ใช้จาก ApiService.getUserTickets
+  // ฟังก์ชันเปิดหน้าสแกน QR Code
+  Future<void> openQrScanner() async {
+    final scannedResult = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const QrScannerScreen()),
+    );
+
+    if (scannedResult != null && scannedResult.isNotEmpty) {
+      setState(() {
+        locationController.text = scannedResult;
+        selectedTab = 1; // สลับไปหน้าแจ้งซ่อมทันที
+      });
+
+      // ดึงรายการอุปกรณ์ในห้องนั้นจาก API
+      fetchDevicesInRoom(scannedResult);
+
+      showMessage('สแกนสำเร็จ: ดึงข้อมูลห้อง $scannedResult เรียบร้อย');
+    }
+  }
+
+  // ดึงประวัติการแจ้งซ่อมของผู้ใช้
   Future<void> fetchRepairHistory() async {
     setState(() {
       isLoading = true;
@@ -80,16 +133,63 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     }
   }
 
-  // ส่งฟอร์มแจ้งซ่อมด้วย ApiService.createTicket
-  // ส่งฟอร์มแจ้งซ่อมด้วย ApiService.createTicket
+  // ส่งฟอร์มแจ้งซ่อม
+  // ส่งฟอร์มแจ้งซ่อม
   Future<void> submitRepair() async {
     final inputDeviceId = deviceIdController.text.trim();
 
+    // 1. ถ้าประเภทอุปกรณ์ยังไม่มีค่า ให้ใช้ค่าเริ่มต้นทันที (ไม่ต้องมี Dropdown ให้เลือกแล้ว)
+    selectedEquipment ??= 'อุปกรณ์ทั่วไป';
+
+    // 2. เช็กเฉพาะ 3 ช่องที่มีอยู่จริงบนหน้าจอ (รหัสเครื่อง, สถานที่, อาการเสีย)
     if (inputDeviceId.isEmpty ||
-        selectedEquipment == null ||
         detailController.text.trim().isEmpty ||
         locationController.text.trim().isEmpty) {
       showMessage('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+      return;
+    }
+
+    // 3. ตรวจสอบการแจ้งซ่อมซ้ำ
+    final hasPendingTicket = repairHistory.any((ticket) {
+      final ticketDeviceId = ticket['device_id']?.toString().trim() ?? '';
+      final description = ticket['description']?.toString() ?? '';
+      final status = translateStatus(ticket['status']?.toString());
+
+      final isSameDevice =
+          inputDeviceId.isNotEmpty &&
+          ((ticketDeviceId.isNotEmpty && ticketDeviceId == inputDeviceId) ||
+              description.contains('[รหัสเครื่อง: $inputDeviceId]'));
+
+      final isStillActive = status == 'รอดำเนินการ' || status == 'กำลังซ่อม';
+
+      return isSameDevice && isStillActive;
+    });
+
+    if (hasPendingTicket) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+              SizedBox(width: 8),
+              Text('อุปกรณ์นี้ถูกแจ้งซ่อมแล้ว'),
+            ],
+          ),
+          content: Text(
+            'อุปกรณ์รหัส "$inputDeviceId" มีรายการแจ้งซ่อมที่กำลังดำเนินการอยู่แล้ว คุณสามารถติดตามสถานะได้ในหน้าประวัติ',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ตกลง'),
+            ),
+          ],
+        ),
+      );
       return;
     }
 
@@ -101,6 +201,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
     final fullDescription =
         '[รหัสเครื่อง: $inputDeviceId] [ประเภท: $selectedEquipment] [สถานที่: ${locationController.text.trim()}] ${detailController.text.trim()}';
+
     try {
       final success = await ApiService.createTicket(
         deviceId: parsedDeviceId,
@@ -109,22 +210,48 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       );
 
       if (success) {
-        // 1. เคลียร์ค่าฟอร์มก่อน
         deviceIdController.clear();
         detailController.clear();
         locationController.clear();
 
         setState(() {
           selectedEquipment = null;
-          selectedTab = 2; // 2. สลับไปหน้าประวัติทันที
+          selectedRoomDeviceId = null;
+          deviceList = [];
+          selectedTab = 2; // สลับไปหน้าประวัติ
         });
 
         showMessage('ส่งคำขอแจ้งซ่อมสำเร็จ');
-
-        // 3. ดึงข้อมูลใหม่เพื่ออัปเดตประวัติและจำนวนทั้งหมด
         await fetchRepairHistory();
       } else {
-        showMessage('เกิดข้อผิดพลาด ไม่สามารถบันทึกข้อมูลได้');
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.orange,
+                  size: 28,
+                ),
+                SizedBox(width: 8),
+                Text('ไม่สามารถบันทึกได้'),
+              ],
+            ),
+            content: Text(
+              'ไม่สามารถบันทึกได้ เนื่องจากอุปกรณ์รหัส "$inputDeviceId" มีรายการแจ้งซ่อมซ้ำหรืออยู่ระหว่างดำเนินการอยู่แล้ว',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('ตกลง'),
+              ),
+            ],
+          ),
+        );
       }
     } catch (e) {
       showMessage('เกิดข้อผิดพลาดในการส่งข้อมูล: $e');
@@ -137,7 +264,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     }
   }
 
-  // แปลงค่า Status จาก API (เช่น 'pending', 'in_progress', 'completed') เป็นภาษาไทย
   String translateStatus(String? status) {
     switch (status?.toLowerCase()) {
       case 'pending':
@@ -229,7 +355,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           ),
           const SizedBox(height: 24),
 
-          // การ์ดสแกน QR Code
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -250,11 +375,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: () {
-                        showMessage(
-                          'ส่วนสแกน QR Code จะเชื่อมกล้องในขั้นตอนถัดไป',
-                        );
-                      },
+                      onPressed: openQrScanner,
                       icon: const Icon(Icons.camera_alt_outlined),
                       label: const Text('เริ่มสแกน QR Code'),
                     ),
@@ -266,7 +387,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
           const SizedBox(height: 16),
 
-          // ทางลัดไปยังฟอร์มแจ้งซ่อม
           Card(
             child: ListTile(
               leading: Icon(
@@ -373,7 +493,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   // -------------------------------------------------------------
   Widget buildRepairForm() {
     return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,60 +501,17 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             'แจ้งซ่อมอุปกรณ์',
             style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 8),
-          const Text('กรอกข้อมูลอุปกรณ์และอาการเสีย'),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
+          // 1. ปุ่มสแกน QR Code
           OutlinedButton.icon(
-            onPressed: () {
-              showMessage('ส่วนสแกน QR Code จะเชื่อมกล้องในขั้นตอนถัดไป');
-            },
+            onPressed: openQrScanner,
             icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('สแกน QR Code อุปกรณ์'),
-          ),
-
-          const SizedBox(height: 20),
-          const Text(
-            'ประเภทอุปกรณ์ *',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-
-          DropdownButtonFormField<String>(
-            value: selectedEquipment,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              hintText: 'เลือกประเภทอุปกรณ์',
-              border: OutlineInputBorder(),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-            items: equipmentList.map((equipment) {
-              return DropdownMenuItem(value: equipment, child: Text(equipment));
-            }).toList(),
-            onChanged: (value) {
-              setState(() {
-                selectedEquipment = value;
-              });
-            },
+            label: const Text('สแกน QR Code ประจำห้อง / อุปกรณ์'),
           ),
           const SizedBox(height: 20),
-          const Text(
-            'รหัสเครื่อง / Device ID *',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: deviceIdController,
-            decoration: const InputDecoration(
-              hintText: 'เช่น 101 หรือ PC-SC2-307-01',
-              border: OutlineInputBorder(),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-          ),
 
-          const SizedBox(height: 20),
+          // 2. ช่องสถานที่ตั้งอุปกรณ์
           const Text(
             'สถานที่ตั้งอุปกรณ์ *',
             style: TextStyle(fontWeight: FontWeight.bold),
@@ -444,14 +520,87 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           TextField(
             controller: locationController,
             decoration: const InputDecoration(
-              hintText: 'เช่น อาคาร 1 ห้องปฏิบัติการ 301',
+              hintText: 'เช่น SC2-307',
               border: OutlineInputBorder(),
               filled: true,
               fillColor: Colors.white,
             ),
           ),
-
           const SizedBox(height: 20),
+
+          // 3. รายการเลือกอุปกรณ์ในห้อง (ถ้ามีข้อมูลดึงจาก API)
+          if (deviceList.isNotEmpty) ...[
+            const Text(
+              'เลือกอุปกรณ์ในห้องนี้ *',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: selectedRoomDeviceId,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                hintText: '-- เลือกอุปกรณ์ที่เสียในห้องนี้ --',
+                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+              items: deviceList.map((device) {
+                final devId = (device['id'] ?? device['device_id'] ?? '')
+                    .toString();
+                final devName =
+                    (device['name'] ?? device['device_name'] ?? 'อุปกรณ์')
+                        .toString();
+
+                return DropdownMenuItem<String>(
+                  value: devId,
+                  child: Text('$devName (ID: $devId)'),
+                );
+              }).toList(),
+              onChanged: (val) {
+                setState(() {
+                  selectedRoomDeviceId = val;
+                  final matched = deviceList.firstWhere(
+                    (d) => (d['id'] ?? d['device_id'] ?? '').toString() == val,
+                    orElse: () => null,
+                  );
+
+                  if (matched != null) {
+                    deviceIdController.text = val ?? '';
+
+                    // ดึงประเภทอุปกรณ์จาก API มาแมปอัตโนมัติ
+                    final apiType =
+                        (matched['type'] ??
+                                matched['equipment_type'] ??
+                                matched['device_type'])
+                            ?.toString();
+                    selectedEquipment = (apiType != null && apiType.isNotEmpty)
+                        ? apiType
+                        : 'อุปกรณ์ทั่วไป';
+                  }
+                });
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+
+          // 4. ช่องรหัสเครื่อง
+          const Text(
+            'รหัสเครื่อง / Device ID *',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: deviceIdController,
+            decoration: const InputDecoration(
+              hintText: 'เช่น 80',
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 5. ช่องรายละเอียดอาการเสีย
           const Text(
             'รายละเอียดอาการเสีย *',
             style: TextStyle(fontWeight: FontWeight.bold),
@@ -467,8 +616,9 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               fillColor: Colors.white,
             ),
           ),
-
           const SizedBox(height: 24),
+
+          // 6. ปุ่มกดส่งคำขอ
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
@@ -528,19 +678,18 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     final statusColor = displayStatus == 'ซ่อมเสร็จแล้ว'
         ? Colors.green
         : displayStatus == 'กำลังซ่อม'
-            ? Colors.blue
-            : Colors.orange;
+        ? Colors.blue
+        : Colors.orange;
 
     final equipmentName =
         repair['device_name'] ?? repair['equipment'] ?? 'อุปกรณ์ทั่วไป';
 
-    String fullDesc =
-        (repair['description'] ?? repair['detail'] ?? '-').toString();
-    String locationName =
-        (repair['location_name'] ?? repair['location'] ?? '').toString();
+    String fullDesc = (repair['description'] ?? repair['detail'] ?? '-')
+        .toString();
+    String locationName = (repair['location_name'] ?? repair['location'] ?? '')
+        .toString();
     String cleanDetail = fullDesc;
 
-    // 1. ดึงข้อความสถานที่จาก Tag [สถานที่: ...]
     if ((locationName.isEmpty || locationName == '-') &&
         fullDesc.contains('[สถานที่:')) {
       final regExpLocation = RegExp(r'\[สถานที่:\s*(.*?)\]');
@@ -550,10 +699,8 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       }
     }
 
-    // 2. จัดรูปแบบสถานที่ให้ขึ้น อาคาร/ชั้น/ห้อง (หากมีเฉพาะเลขห้อง)
     String formattedLocation = locationName.trim();
     if (formattedLocation.isNotEmpty && formattedLocation != '-') {
-      // ถ้าพิมพ์แค่ตัวเลข เช่น 307 ให้ใส่คำว่า "ห้อง" ด้านหน้า
       if (!formattedLocation.contains('อาคาร') &&
           !formattedLocation.contains('ห้อง')) {
         formattedLocation = 'ห้อง $formattedLocation';
@@ -562,9 +709,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       formattedLocation = '-';
     }
 
-    // 3. ทำความสะอาดรายละเอียดอาการเสีย
-    cleanDetail =
-        cleanDetail.replaceAll(RegExp(r'\[รหัสเครื่อง:.*?\]\s*'), '');
+    cleanDetail = cleanDetail.replaceAll(RegExp(r'\[รหัสเครื่อง:.*?\]\s*'), '');
     cleanDetail = cleanDetail.replaceAll(RegExp(r'\[ประเภท:.*?\]\s*'), '');
     cleanDetail = cleanDetail.replaceAll(RegExp(r'\[สถานที่:.*?\]\s*'), '');
 
@@ -591,7 +736,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            // แสดงผลสถานที่ตามรูปแบบที่จัดไว้
             Text('สถานที่: $formattedLocation'),
             const SizedBox(height: 6),
             Text('รายละเอียด: $cleanDetail'),
@@ -609,6 +753,91 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// หน้าจอสำหรับสแกน QR Code (Mobile Scanner Screen)
+// -------------------------------------------------------------
+class QrScannerScreen extends StatefulWidget {
+  const QrScannerScreen({super.key});
+
+  @override
+  State<QrScannerScreen> createState() => _QrScannerScreenState();
+}
+
+class _QrScannerScreenState extends State<QrScannerScreen> {
+  final MobileScannerController controller = MobileScannerController();
+  bool isScanned = false;
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('สแกน QR Code อุปกรณ์'),
+        actions: [
+          IconButton(
+            icon: ValueListenableBuilder(
+              valueListenable: controller,
+              builder: (context, state, child) {
+                final isTorchOn = state.torchState == TorchState.on;
+                return Icon(
+                  isTorchOn ? Icons.flash_on : Icons.flash_off,
+                  color: isTorchOn ? Colors.yellow : Colors.grey,
+                );
+              },
+            ),
+            onPressed: () => controller.toggleTorch(),
+          ),
+          IconButton(
+            icon: ValueListenableBuilder(
+              valueListenable: controller,
+              builder: (context, state, child) {
+                return const Icon(Icons.cameraswitch);
+              },
+            ),
+            onPressed: () => controller.switchCamera(),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          MobileScanner(
+            controller: controller,
+            onDetect: (barcodeCapture) {
+              if (isScanned) return;
+
+              final List<Barcode> barcodes = barcodeCapture.barcodes;
+              for (final barcode in barcodes) {
+                if (barcode.rawValue != null && barcode.rawValue!.isNotEmpty) {
+                  setState(() {
+                    isScanned = true;
+                  });
+                  Navigator.pop(context, barcode.rawValue);
+                  break;
+                }
+              }
+            },
+          ),
+          Center(
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white, width: 3),
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
