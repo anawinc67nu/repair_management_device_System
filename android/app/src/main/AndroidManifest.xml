@@ -1,4 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.CAMERA"/>
     <application
         android:label="repair_management_device_system"
         android:name="${applicationName}"
