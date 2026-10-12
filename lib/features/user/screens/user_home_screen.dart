@@ -78,8 +78,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
         });
       }
     }
-    final tickets = await ApiService.getUserTickets(currentUserId);
-    print('Response from API: $tickets');
   }
 
   // ส่งฟอร์มแจ้งซ่อมด้วย ApiService.createTicket
@@ -103,7 +101,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
     final fullDescription =
         '[รหัสเครื่อง: $inputDeviceId] [ประเภท: $selectedEquipment] [สถานที่: ${locationController.text.trim()}] ${detailController.text.trim()}';
-
     try {
       final success = await ApiService.createTicket(
         deviceId: parsedDeviceId,
@@ -531,13 +528,45 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     final statusColor = displayStatus == 'ซ่อมเสร็จแล้ว'
         ? Colors.green
         : displayStatus == 'กำลังซ่อม'
-        ? Colors.blue
-        : Colors.orange;
+            ? Colors.blue
+            : Colors.orange;
 
     final equipmentName =
         repair['device_name'] ?? repair['equipment'] ?? 'อุปกรณ์ทั่วไป';
-    final locationName = repair['location_name'] ?? repair['location'] ?? '-';
-    final description = repair['description'] ?? repair['detail'] ?? '-';
+
+    String fullDesc =
+        (repair['description'] ?? repair['detail'] ?? '-').toString();
+    String locationName =
+        (repair['location_name'] ?? repair['location'] ?? '').toString();
+    String cleanDetail = fullDesc;
+
+    // 1. ดึงข้อความสถานที่จาก Tag [สถานที่: ...]
+    if ((locationName.isEmpty || locationName == '-') &&
+        fullDesc.contains('[สถานที่:')) {
+      final regExpLocation = RegExp(r'\[สถานที่:\s*(.*?)\]');
+      final matchLoc = regExpLocation.firstMatch(fullDesc);
+      if (matchLoc != null) {
+        locationName = matchLoc.group(1) ?? '-';
+      }
+    }
+
+    // 2. จัดรูปแบบสถานที่ให้ขึ้น อาคาร/ชั้น/ห้อง (หากมีเฉพาะเลขห้อง)
+    String formattedLocation = locationName.trim();
+    if (formattedLocation.isNotEmpty && formattedLocation != '-') {
+      // ถ้าพิมพ์แค่ตัวเลข เช่น 307 ให้ใส่คำว่า "ห้อง" ด้านหน้า
+      if (!formattedLocation.contains('อาคาร') &&
+          !formattedLocation.contains('ห้อง')) {
+        formattedLocation = 'ห้อง $formattedLocation';
+      }
+    } else {
+      formattedLocation = '-';
+    }
+
+    // 3. ทำความสะอาดรายละเอียดอาการเสีย
+    cleanDetail =
+        cleanDetail.replaceAll(RegExp(r'\[รหัสเครื่อง:.*?\]\s*'), '');
+    cleanDetail = cleanDetail.replaceAll(RegExp(r'\[ประเภท:.*?\]\s*'), '');
+    cleanDetail = cleanDetail.replaceAll(RegExp(r'\[สถานที่:.*?\]\s*'), '');
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -562,9 +591,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            Text('สถานที่: $locationName'),
+            // แสดงผลสถานที่ตามรูปแบบที่จัดไว้
+            Text('สถานที่: $formattedLocation'),
             const SizedBox(height: 6),
-            Text('รายละเอียด: $description'),
+            Text('รายละเอียด: $cleanDetail'),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerLeft,
