@@ -65,10 +65,15 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
   bool _isLoading = true;
   String? _errorMessage;
 
+  List<Map<String, dynamic>> _recentTickets = [];
+  bool _isLoadingTickets = true;
+  String? _ticketsError;
+
   @override
   void initState() {
     super.initState();
     _loadDashboard();
+    _loadRecentTickets();
   }
 
   Future<void> _loadDashboard() async {
@@ -111,6 +116,122 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
     if (_errorMessage != null) return '-';
 
     return (_summary?[key] ?? 0).toString();
+  }
+
+  Future<void> _loadRecentTickets() async {
+    setState(() {
+      _isLoadingTickets = true;
+      _ticketsError = null;
+    });
+
+    try {
+      final data = await ApiService.getTickets();
+
+      if (!mounted) return;
+
+      if (data == null) {
+        setState(() {
+          _ticketsError = 'โหลดรายการแจ้งซ่อมไม่สำเร็จ';
+          _isLoadingTickets = false;
+        });
+        return;
+      }
+
+      final tickets = data
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+
+      DateTime getDate(Map<String, dynamic> item) {
+        return DateTime.tryParse(
+              (item['created_at'] ?? item['createdAt'] ?? '').toString(),
+            ) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+      }
+
+      tickets.sort((a, b) => getDate(b).compareTo(getDate(a)));
+
+      setState(() {
+        _recentTickets = tickets.take(3).toList();
+        _isLoadingTickets = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _ticketsError = 'เกิดข้อผิดพลาดในการโหลดรายการ';
+        _isLoadingTickets = false;
+      });
+    }
+  }
+
+  String _ticketStatus(dynamic rawStatus) {
+    switch ((rawStatus ?? 'pending').toString()) {
+      case 'pending':
+        return 'รอดำเนินการ';
+      case 'in_progress':
+        return 'กำลังซ่อม';
+      case 'completed':
+        return 'ซ่อมเสร็จแล้ว';
+      case 'cancelled':
+        return 'ยกเลิก';
+      default:
+        return (rawStatus ?? 'ไม่ระบุสถานะ').toString();
+    }
+  }
+
+  Color _ticketStatusColor(String status) {
+    switch (status) {
+      case 'รอดำเนินการ':
+        return const Color(0xFFD97706);
+      case 'กำลังซ่อม':
+        return const Color(0xFF7C3AED);
+      case 'ซ่อมเสร็จแล้ว':
+        return const Color(0xFF16A34A);
+      case 'ยกเลิก':
+        return const Color(0xFFDC2626);
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _ticketDate(Map<String, dynamic> ticket) {
+    final date = DateTime.tryParse(
+      (ticket['created_at'] ?? ticket['createdAt'] ?? '').toString(),
+    );
+
+    if (date == null) return 'ไม่ระบุวันที่';
+
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.year}';
+  }
+
+  String _ticketId(Map<String, dynamic> ticket) {
+    final id = ticket['id'] ?? '-';
+    return 'REP-${id.toString().padLeft(3, '0')}';
+  }
+
+  String _ticketEquipment(Map<String, dynamic> ticket) {
+    return (ticket['equipment_name'] ??
+            ticket['device_name'] ??
+            ticket['equipment'] ??
+            ticket['device_code'] ??
+            'ไม่ระบุอุปกรณ์')
+        .toString();
+  }
+
+  String _ticketRoom(Map<String, dynamic> ticket) {
+    return (ticket['room_number'] ??
+            ticket['room'] ??
+            ticket['room_name'] ??
+            'ไม่ระบุห้อง')
+        .toString();
+  }
+
+  String _ticketDescription(Map<String, dynamic> ticket) {
+    return (ticket['description'] ?? ticket['problem'] ?? 'ไม่ระบุรายละเอียด')
+        .toString();
   }
 
   @override
@@ -470,34 +591,62 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
                   const SizedBox(height: 8),
 
                   // มือถือใช้การ์ด ส่วนแท็บเล็ตและคอมใช้ตาราง
-                  if (width < 700)
+                  if (_isLoadingTickets)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_ticketsError != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            _ticketsError!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                          TextButton.icon(
+                            onPressed: _loadRecentTickets,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('ลองอีกครั้ง'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (_recentTickets.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Center(
+                        child: Text('ยังไม่มีรายการแจ้งซ่อม'),
+                      ),
+                    )
+                  else if (width < 700)
                     Column(
-                      children: [
-                        _repairCard(
-                          'R001',
-                          'คอมพิวเตอร์เปิดไม่ติด',
-                          'LAB-01',
-                          '08/10/2026',
-                          'รอดำเนินการ',
-                          const Color(0xFFD97706),
-                        ),
-                        _repairCard(
-                          'R002',
-                          'โปรเจกเตอร์ไม่แสดงภาพ',
-                          'ROOM-203',
-                          '08/10/2026',
-                          'กำลังซ่อม',
-                          const Color(0xFF7C3AED),
-                        ),
-                        _repairCard(
-                          'R003',
-                          'เปลี่ยนสาย LAN',
-                          'LAB-02',
-                          '07/10/2026',
-                          'ซ่อมเสร็จแล้ว',
-                          const Color(0xFF16A34A),
-                        ),
-                      ],
+                      children: _recentTickets.map((ticket) {
+                        final status = _ticketStatus(ticket['status']);
+                        final color = _ticketStatusColor(status);
+
+                        return _repairCard(
+                          _ticketId(ticket),
+                          _ticketDescription(ticket),
+                          _ticketRoom(ticket),
+                          _ticketDate(ticket),
+                          status,
+                          color,
+                        );
+                      }).toList(),
                     )
                   else
                     Container(
@@ -517,32 +666,18 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
                             DataColumn(label: Text('วันที่')),
                             DataColumn(label: Text('สถานะ')),
                           ],
-                          rows: [
-                            _repairRow(
-                              'R001',
-                              'คอมพิวเตอร์เปิดไม่ติด',
-                              'LAB-01',
-                              '08/10/2026',
-                              'รอดำเนินการ',
-                              const Color(0xFFD97706),
-                            ),
-                            _repairRow(
-                              'R002',
-                              'โปรเจกเตอร์ไม่แสดงภาพ',
-                              'ROOM-203',
-                              '08/10/2026',
-                              'กำลังซ่อม',
-                              const Color(0xFF7C3AED),
-                            ),
-                            _repairRow(
-                              'R003',
-                              'เปลี่ยนสาย LAN',
-                              'LAB-02',
-                              '07/10/2026',
-                              'ซ่อมเสร็จแล้ว',
-                              const Color(0xFF16A34A),
-                            ),
-                          ],
+                          rows: _recentTickets.map((ticket) {
+                            final status = _ticketStatus(ticket['status']);
+
+                            return _repairRow(
+                              _ticketId(ticket),
+                              _ticketDescription(ticket),
+                              _ticketRoom(ticket),
+                              _ticketDate(ticket),
+                              status,
+                              _ticketStatusColor(status),
+                            );
+                          }).toList(),
                         ),
                       ),
                     ),

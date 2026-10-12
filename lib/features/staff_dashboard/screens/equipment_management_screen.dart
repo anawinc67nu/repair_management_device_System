@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../services/api_service.dart';
 
 class EquipmentManagementScreen extends StatefulWidget {
   const EquipmentManagementScreen({super.key});
@@ -12,37 +13,75 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
   static const Color navy = Color(0xFF192957);
   static const Color pageBackground = Color(0xFFF4F6FB);
 
-  // ข้อมูลห้องตัวอย่าง ให้ตรงกับหน้าจัดการห้อง
-  final List<String> _rooms = [
-    'ห้องปฏิบัติการคอมพิวเตอร์ 1',
-    'ห้องเรียน 203',
-    'ห้องประชุมใหญ่',
-  ];
+  final List<String> _rooms = ['ไม่ระบุห้อง'];
+  final List<Map<String, String>> _equipment = [];
+  bool _isLoading = false;
+  String? _loadError;
 
-  // ข้อมูลอุปกรณ์ตัวอย่าง
-  final List<Map<String, String>> _equipment = [
-    {
-      'id': 'EQ001',
-      'name': 'คอมพิวเตอร์ตั้งโต๊ะ',
-      'room': 'ห้องปฏิบัติการคอมพิวเตอร์ 1',
-      'category': 'คอมพิวเตอร์',
-      'status': 'พร้อมใช้งาน',
-    },
-    {
-      'id': 'EQ002',
-      'name': 'โปรเจกเตอร์',
-      'room': 'ห้องเรียน 203',
-      'category': 'อุปกรณ์นำเสนอ',
-      'status': 'ชำรุด',
-    },
-    {
-      'id': 'EQ003',
-      'name': 'เครื่องปรับอากาศ',
-      'room': 'ห้องประชุมใหญ่',
-      'category': 'เครื่องใช้ไฟฟ้า',
-      'status': 'พร้อมใช้งาน',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    if (mounted)
+      setState(() {
+        _isLoading = true;
+        _loadError = null;
+      });
+    final results = await Future.wait([
+      ApiService.getEquipments(),
+      ApiService.getRooms(),
+    ]);
+    if (!mounted) return;
+    final eqResult = results[0] as List<dynamic>?;
+    final roomResult = results[1] as List<dynamic>?;
+    if (eqResult == null) {
+      setState(() {
+        _isLoading = false;
+        _loadError = 'โหลดข้อมูลอุปกรณ์ไม่สำเร็จ';
+      });
+      return;
+    }
+    final rows = eqResult.whereType<Map>().map((raw) {
+      final item = Map<String, dynamic>.from(raw);
+      return <String, String>{
+        'id': (item['id'] ?? item['device_code'] ?? item['code'] ?? '')
+            .toString(),
+        'name':
+            (item['name'] ??
+                    item['equipment_name'] ??
+                    item['device_name'] ??
+                    '')
+                .toString(),
+        'room':
+            (item['room'] ?? item['room_name'] ?? item['location_name'] ?? '')
+                .toString(),
+        'category': (item['category'] ?? item['type'] ?? 'อื่น ๆ').toString(),
+        'status': (item['status'] ?? 'พร้อมใช้งาน').toString(),
+      };
+    }).toList();
+    final roomNames = (roomResult ?? [])
+        .whereType<Map>()
+        .map((raw) {
+          final item = Map<String, dynamic>.from(raw);
+          return (item['name'] ?? item['room_name'] ?? '').toString();
+        })
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .toList();
+    setState(() {
+      _equipment
+        ..clear()
+        ..addAll(rows);
+      _rooms
+        ..clear()
+        ..addAll(roomNames);
+      if (_rooms.isEmpty) _rooms.add('ไม่ระบุห้อง');
+      _isLoading = false;
+    });
+  }
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -226,7 +265,7 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(backgroundColor: navy),
-                  onPressed: () {
+                  onPressed: () async {
                     if (!formKey.currentState!.validate()) return;
 
                     final data = <String, String>{
@@ -237,22 +276,33 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
                       'status': status,
                     };
 
-                    setState(() {
-                      if (isEditing) {
-                        final index = _equipment.indexWhere(
-                          (item) => item['id'] == equipment['id'],
-                        );
-
-                        if (index != -1) {
-                          _equipment[index] = data;
-                        }
-                      } else {
-                        _equipment.add(data);
-                      }
-                    });
-
+                    final payload = <String, dynamic>{
+                      'id': data['id'],
+                      'name': data['name'],
+                      'room': data['room'],
+                      'category': data['category'],
+                      'status': data['status'],
+                    };
+                    final ok = isEditing
+                        ? await ApiService.updateEquipment(
+                            equipment['id']!,
+                            payload,
+                          )
+                        : await ApiService.createEquipment(payload);
+                    if (!dialogContext.mounted) return;
+                    if (!ok) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'บันทึกข้อมูลอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบ API',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
                     Navigator.pop(dialogContext);
-
+                    await _loadData();
+                    if (!mounted) return;
                     ScaffoldMessenger.of(this.context).showSnackBar(
                       SnackBar(
                         content: Text(
@@ -296,9 +346,15 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
     if (!mounted) return;
 
     if (confirmed == true) {
-      setState(() {
-        _equipment.removeWhere((item) => item['id'] == equipment['id']);
-      });
+      final ok = await ApiService.deleteEquipment(equipment['id']!);
+      if (!mounted) return;
+      if (ok) {
+        await _loadData();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ลบอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบ API')),
+        );
+      }
     }
   }
 
@@ -322,6 +378,13 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
         backgroundColor: Colors.white,
         foregroundColor: navy,
         elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'โหลดใหม่',
+            onPressed: _loadData,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
         title: const Text(
           'จัดการอุปกรณ์',
           style: TextStyle(fontWeight: FontWeight.bold),
@@ -351,6 +414,12 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (_isLoading) const LinearProgressIndicator(),
+                      if (_loadError != null)
+                        Text(
+                          '$_loadError — กดรีเฟรชเพื่อลองอีกครั้ง',
+                          style: const TextStyle(color: Colors.red),
+                        ),
                       const Text(
                         'จัดการข้อมูลอุปกรณ์',
                         style: TextStyle(

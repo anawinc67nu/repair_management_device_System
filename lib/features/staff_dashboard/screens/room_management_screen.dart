@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../services/api_service.dart';
 
 class RoomManagementScreen extends StatefulWidget {
   const RoomManagementScreen({super.key});
@@ -8,29 +9,50 @@ class RoomManagementScreen extends StatefulWidget {
 }
 
 class _RoomManagementScreenState extends State<RoomManagementScreen> {
-  final List<Map<String, String>> _rooms = [
-    {
-      'id': 'RM001',
-      'name': 'ห้องปฏิบัติการคอมพิวเตอร์ 1',
-      'building': 'อาคาร 1',
-      'type': 'ห้องปฏิบัติการ',
-      'status': 'เปิดใช้งาน',
-    },
-    {
-      'id': 'RM002',
-      'name': 'ห้องเรียน 203',
-      'building': 'อาคาร 2',
-      'type': 'ห้องเรียน',
-      'status': 'เปิดใช้งาน',
-    },
-    {
-      'id': 'RM003',
-      'name': 'ห้องประชุมใหญ่',
-      'building': 'อาคาร 1',
-      'type': 'ห้องประชุม',
-      'status': 'ปิดใช้งาน',
-    },
-  ];
+  final List<Map<String, String>> _rooms = [];
+  bool _isLoading = false;
+  String? _loadError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRooms();
+  }
+
+  Future<void> _loadRooms() async {
+    if (mounted)
+      setState(() {
+        _isLoading = true;
+        _loadError = null;
+      });
+    final result = await ApiService.getRooms();
+    if (!mounted) return;
+    if (result == null) {
+      setState(() {
+        _isLoading = false;
+        _loadError = 'โหลดข้อมูลห้องไม่สำเร็จ';
+      });
+      return;
+    }
+    final rows = result.whereType<Map>().map((raw) {
+      final item = Map<String, dynamic>.from(raw);
+      return <String, String>{
+        'id': (item['id'] ?? item['room_code'] ?? item['code'] ?? '')
+            .toString(),
+        'name': (item['name'] ?? item['room_name'] ?? '').toString(),
+        'building': (item['building'] ?? item['building_name'] ?? '')
+            .toString(),
+        'type': (item['type'] ?? item['room_type'] ?? 'ห้องเรียน').toString(),
+        'status': (item['status'] ?? 'เปิดใช้งาน').toString(),
+      };
+    }).toList();
+    setState(() {
+      _rooms
+        ..clear()
+        ..addAll(rows);
+      _isLoading = false;
+    });
+  }
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -194,7 +216,7 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                   child: const Text('ยกเลิก'),
                 ),
                 FilledButton(
-                  onPressed: () {
+                  onPressed: () async {
                     if (!formKey.currentState!.validate()) return;
 
                     final data = <String, String>{
@@ -205,18 +227,30 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                       'status': status,
                     };
 
-                    setState(() {
-                      if (isEditing) {
-                        final index = _rooms.indexWhere(
-                          (item) => item['id'] == room['id'],
-                        );
-                        if (index != -1) _rooms[index] = data;
-                      } else {
-                        _rooms.add(data);
-                      }
-                    });
-
+                    final payload = <String, dynamic>{
+                      'id': data['id'],
+                      'name': data['name'],
+                      'building': data['building'],
+                      'type': data['type'],
+                      'status': data['status'],
+                    };
+                    final ok = isEditing
+                        ? await ApiService.updateRoom(room['id']!, payload)
+                        : await ApiService.createRoom(payload);
+                    if (!dialogContext.mounted) return;
+                    if (!ok) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'บันทึกข้อมูลห้องไม่สำเร็จ กรุณาตรวจสอบ API',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
                     Navigator.pop(dialogContext);
+                    await _loadRooms();
+                    if (!mounted) return;
                     ScaffoldMessenger.of(this.context).showSnackBar(
                       SnackBar(
                         content: Text(
@@ -256,7 +290,15 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     );
 
     if (confirmed == true) {
-      setState(() => _rooms.removeWhere((item) => item['id'] == room['id']));
+      final ok = await ApiService.deleteRoom(room['id']!);
+      if (!mounted) return;
+      if (ok) {
+        await _loadRooms();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ลบห้องไม่สำเร็จ กรุณาตรวจสอบ API')),
+        );
+      }
     }
   }
 
@@ -270,6 +312,13 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
         backgroundColor: Colors.white,
         foregroundColor: navy,
         elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'โหลดใหม่',
+            onPressed: _loadRooms,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
         title: const Text(
           'จัดการห้อง',
           style: TextStyle(fontWeight: FontWeight.bold),
@@ -299,6 +348,12 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (_isLoading) const LinearProgressIndicator(),
+                      if (_loadError != null)
+                        Text(
+                          '$_loadError — กดรีเฟรชเพื่อลองอีกครั้ง',
+                          style: const TextStyle(color: Colors.red),
+                        ),
                       const Text(
                         'จัดการข้อมูลห้อง',
                         style: TextStyle(
