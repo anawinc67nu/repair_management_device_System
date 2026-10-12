@@ -80,7 +80,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
   String _statusText(RepairStatus status) {
     switch (status) {
       case RepairStatus.pending:
-        return 'รอรับงาน';
+        return 'รอดำเนินการ';
       case RepairStatus.accepted:
         return 'รับงานแล้ว';
       case RepairStatus.inProgress:
@@ -150,17 +150,33 @@ class _TicketListScreenState extends State<TicketListScreen> {
           ),
           SizedBox(
             height: 48,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+            child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                _filterChip('ทั้งหมด', null),
-                _filterChip('รอรับงาน', RepairStatus.pending),
-                _filterChip('รับงานแล้ว', RepairStatus.accepted),
-                _filterChip('กำลังซ่อม', RepairStatus.inProgress),
-                _filterChip('เสร็จสิ้น', RepairStatus.completed),
-                _filterChip('ยกเลิก', RepairStatus.cancelled),
-              ],
+              child: Row(
+                children: [
+                  Expanded(child: _filterChip('ทั้งหมด', null)),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: _filterChip('รอดำเนินการ', RepairStatus.pending),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: _filterChip('รับงานแล้ว', RepairStatus.accepted),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: _filterChip('กำลังซ่อม', RepairStatus.inProgress),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: _filterChip('เสร็จสิ้น', RepairStatus.completed),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: _filterChip('ยกเลิก', RepairStatus.cancelled),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -225,17 +241,43 @@ class _TicketListScreenState extends State<TicketListScreen> {
     );
   }
 
+  void _filterTickets() {
+    setState(() {
+      // โค้ดสำหรับกรองข้อมูลรายการซ่อมตามสถานะ _selectedStatus ที่เลือก
+    });
+  }
+
   Widget _filterChip(String label, RepairStatus? status) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: _selectedStatus == status,
-        onSelected: (_) {
-          setState(() {
-            _selectedStatus = status;
-          });
-        },
+    bool isSelected = _selectedStatus == status;
+
+    return OutlinedButton(
+      onPressed: () {
+        setState(() {
+          _selectedStatus = status;
+          _filterTickets();
+        });
+      },
+      style: OutlinedButton.styleFrom(
+        backgroundColor: isSelected ? Colors.blue.shade50 : Colors.transparent,
+        side: BorderSide(
+          color: isSelected ? Colors.blue : Colors.grey.shade400,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20), // ทำขอบมนให้เหมือน Chip
+        ),
+        padding: const EdgeInsets.symmetric(
+          vertical: 12,
+        ), // ปรับความสูงตามต้องการ
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.blue.shade700 : Colors.black87,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
       ),
     );
   }

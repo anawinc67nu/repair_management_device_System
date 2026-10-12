@@ -4,6 +4,7 @@ import 'room_management_screen.dart';
 import 'equipment_management_screen.dart';
 import 'repair_management_screen.dart';
 import 'my_profile_screen.dart';
+import '../../staff_tickets/screens/ticket_list_screen.dart';
 
 class StaffDashboardScreen extends StatefulWidget {
   const StaffDashboardScreen({super.key});
@@ -50,7 +51,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
   void _openPage(BuildContext context, int index) {
     final pages = <Widget>[
       const StaffDashboardScreen(),
-      const RepairManagementScreen(),
+      const TicketListScreen(),
       const RoomManagementScreen(),
       const EquipmentManagementScreen(),
       MyProfileScreen(user: userData),
@@ -74,6 +75,12 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
     super.initState();
     _loadDashboard();
     _loadRecentTickets();
+  }
+
+  Future<void> _reloadDashboard() async {
+    if (_isLoading || _isLoadingTickets) return;
+
+    await Future.wait([_loadDashboard(), _loadRecentTickets()]);
   }
 
   Future<void> _loadDashboard() async {
@@ -169,6 +176,8 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
     switch ((rawStatus ?? 'pending').toString()) {
       case 'pending':
         return 'รอดำเนินการ';
+      case 'accepted':
+        return 'รับงานแล้ว';
       case 'in_progress':
         return 'กำลังซ่อม';
       case 'completed':
@@ -184,6 +193,8 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
     switch (status) {
       case 'รอดำเนินการ':
         return const Color(0xFFD97706);
+      case 'รับงานแล้ว':
+        return const Color.fromARGB(255, 50, 180, 255);
       case 'กำลังซ่อม':
         return const Color(0xFF7C3AED);
       case 'ซ่อมเสร็จแล้ว':
@@ -270,6 +281,19 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
                     ],
                   ),
                   actions: [
+                    IconButton(
+                      tooltip: 'รีโหลดข้อมูล',
+                      onPressed: (_isLoading || _isLoadingTickets)
+                          ? null
+                          : _reloadDashboard,
+                      icon: (_isLoading || _isLoadingTickets)
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh, color: navy),
+                    ),
                     IconButton(
                       tooltip: 'ข้อมูลผู้ใช้งาน',
                       onPressed: () => _openPage(context, 4),
