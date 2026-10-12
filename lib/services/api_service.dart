@@ -320,13 +320,25 @@ class ApiService {
         Uri.parse('$baseUrl/tickets/user/$userId'),
         headers: _headers,
       );
+
+      // พิมพ์เช็กสถานะและค่าที่ Server ส่งกลับมา
+      print('getUserTickets Status: ${response.statusCode}');
+      print('getUserTickets Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data is List) {
           return data;
-        } else if (data is Map && data.containsKey('tickets')) {
-          return data['tickets'];
+        } else if (data is Map) {
+          if (data.containsKey('tickets') && data['tickets'] is List) {
+            return data['tickets'];
+          } else if (data.containsKey('data') && data['data'] is List) {
+            return data['data'];
+          }
         }
+        return []; // หากเป็น 200 แต่รูปแบบไม่มีรายการ คืน List ว่างแทน null
+      } else if (response.statusCode == 404) {
+        return []; // หากไม่พบข้อมูล คืน List ว่าง
       }
     } catch (e) {
       print('Get User Tickets Error: $e');
