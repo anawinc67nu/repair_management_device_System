@@ -1,17 +1,27 @@
 import 'package:flutter/material.dart';
-
+import '../../../services/api_service.dart';
 import 'room_management_screen.dart';
 import 'equipment_management_screen.dart';
 import 'repair_management_screen.dart';
 import 'my_profile_screen.dart';
 
-class StaffDashboardScreen extends StatelessWidget {
+class StaffDashboardScreen extends StatefulWidget {
   const StaffDashboardScreen({super.key});
 
+  @override
+  State<StaffDashboardScreen> createState() => _StaffDashboardScreenState();
+}
+
+class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
   static const Color navy = Color(0xFF172554);
   static const Color blue = Color(0xFF2563EB);
   static const Color background = Color(0xFFF5F7FB);
-
+  Map<String, dynamic> userData = {
+    'id': '-',
+    'name': 'Staff User',
+    'email': '-',
+    'role': 'staff',
+  };
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -43,12 +53,64 @@ class StaffDashboardScreen extends StatelessWidget {
       const RepairManagementScreen(),
       const RoomManagementScreen(),
       const EquipmentManagementScreen(),
-      const MyProfileScreen(),
+      MyProfileScreen(user: userData),
     ];
 
     if (index == 0) return;
 
     Navigator.push(context, MaterialPageRoute(builder: (_) => pages[index]));
+  }
+
+  Map<String, dynamic>? _summary;
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboard();
+  }
+
+  Future<void> _loadDashboard() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await ApiService.getDashboardStats();
+
+      if (result == null) {
+        throw Exception('ไม่สามารถโหลดข้อมูล Dashboard ได้');
+      }
+
+      final summary = result['summary'];
+
+      if (summary is! Map) {
+        throw Exception('รูปแบบข้อมูล summary ไม่ถูกต้อง');
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _summary = Map<String, dynamic>.from(summary);
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _statValue(String key) {
+    if (_isLoading) return '...';
+    if (_errorMessage != null) return '-';
+
+    return (_summary?[key] ?? 0).toString();
   }
 
   @override
@@ -307,6 +369,18 @@ class StaffDashboardScreen extends StatelessWidget {
                       color: navy,
                     ),
                   ),
+                  if (_errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'โหลดข้อมูลไม่สำเร็จ: $_errorMessage',
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                    TextButton.icon(
+                      onPressed: _loadDashboard,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('ลองโหลดอีกครั้ง'),
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   const Text(
                     'ตรวจสอบสถานะงานซ่อมได้ในหน้าเดียว',
@@ -336,16 +410,16 @@ class StaffDashboardScreen extends StatelessWidget {
                             width: cardWidth,
                             child: _summaryCard(
                               'งานแจ้งซ่อมทั้งหมด',
-                              '48',
-                              Icons.assignment_outlined,
-                              blue,
+                              _statValue('total'),
+                              Icons.assignment,
+                              const Color(0xFF2563EB),
                             ),
                           ),
                           SizedBox(
                             width: cardWidth,
                             child: _summaryCard(
                               'รอดำเนินการ',
-                              '12',
+                              _statValue('pending'),
                               Icons.schedule,
                               const Color(0xFFD97706),
                             ),
@@ -354,7 +428,7 @@ class StaffDashboardScreen extends StatelessWidget {
                             width: cardWidth,
                             child: _summaryCard(
                               'กำลังซ่อม',
-                              '8',
+                              _statValue('inProgress'),
                               Icons.build_outlined,
                               const Color(0xFF7C3AED),
                             ),
@@ -363,7 +437,7 @@ class StaffDashboardScreen extends StatelessWidget {
                             width: cardWidth,
                             child: _summaryCard(
                               'ซ่อมเสร็จแล้ว',
-                              '28',
+                              _statValue('completed'),
                               Icons.check_circle_outline,
                               const Color(0xFF16A34A),
                             ),
@@ -472,68 +546,6 @@ class StaffDashboardScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-
-                  const SizedBox(height: 24),
-
-                  const Text(
-                    'เมนูด่วน',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: navy,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ใช้ Wrap เพื่อให้เมนูขึ้นบรรทัดใหม่ได้เมื่อจอแคบ
-                  LayoutBuilder(
-                    builder: (context, actionConstraints) {
-                      final actionWidth = actionConstraints.maxWidth;
-                      final columns = actionWidth >= 800
-                          ? 3
-                          : actionWidth >= 400
-                          ? 3
-                          : 2;
-
-                      const spacing = 10.0;
-                      final itemWidth =
-                          (actionWidth - spacing * (columns - 1)) / columns;
-
-                      return Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
-                        children: [
-                          SizedBox(
-                            width: itemWidth,
-                            child: _quickAction(
-                              context,
-                              Icons.assignment_outlined,
-                              'งานแจ้งซ่อม',
-                              () => _openPage(context, 1),
-                            ),
-                          ),
-                          SizedBox(
-                            width: itemWidth,
-                            child: _quickAction(
-                              context,
-                              Icons.meeting_room_outlined,
-                              'จัดการห้อง',
-                              () => _openPage(context, 2),
-                            ),
-                          ),
-                          SizedBox(
-                            width: itemWidth,
-                            child: _quickAction(
-                              context,
-                              Icons.devices_outlined,
-                              'อุปกรณ์',
-                              () => _openPage(context, 3),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
                 ],
               ),
             ),

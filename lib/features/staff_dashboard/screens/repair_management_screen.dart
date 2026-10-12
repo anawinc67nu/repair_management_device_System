@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../../services/api_service.dart';
 
 class RepairRequest {
+  final int ticketId;
   final String id;
   final String equipment;
   final String room;
@@ -10,6 +12,7 @@ class RepairRequest {
   String status;
 
   RepairRequest({
+    required this.ticketId,
     required this.id,
     required this.equipment,
     required this.room,
@@ -28,6 +31,21 @@ class RepairManagementScreen extends StatefulWidget {
 }
 
 class _RepairManagementScreenState extends State<RepairManagementScreen> {
+  String _statusToApi(String status) {
+    switch (status) {
+      case 'รอดำเนินการ':
+        return 'pending';
+      case 'กำลังซ่อม':
+        return 'in_progress';
+      case 'ซ่อมเสร็จแล้ว':
+        return 'completed';
+      case 'ยกเลิก':
+        return 'cancelled';
+      default:
+        return status;
+    }
+  }
+
   static const Color navy = Color(0xFF173B72);
   static const Color blue = Color(0xFF2563EB);
   static const Color background = Color(0xFFF4F7FC);
@@ -36,44 +54,107 @@ class _RepairManagementScreenState extends State<RepairManagementScreen> {
 
   String _selectedFilter = 'ทั้งหมด';
 
-  final List<RepairRequest> _requests = [
-    RepairRequest(
-      id: 'REP-001',
-      equipment: 'คอมพิวเตอร์ PC-01',
-      room: 'ห้องปฏิบัติการคอมพิวเตอร์',
-      reporter: 'สมชาย ใจดี',
-      problem: 'เปิดเครื่องไม่ติด',
-      createdAt: DateTime(2026, 10, 8),
-      status: 'รอดำเนินการ',
-    ),
-    RepairRequest(
-      id: 'REP-002',
-      equipment: 'เครื่องพิมพ์ PR-02',
-      room: 'ห้องสำนักงาน',
-      reporter: 'สุดา รักเรียน',
-      problem: 'เครื่องพิมพ์กระดาษติด',
-      createdAt: DateTime(2026, 10, 7),
-      status: 'กำลังซ่อม',
-    ),
-    RepairRequest(
-      id: 'REP-003',
-      equipment: 'โปรเจกเตอร์ PJ-01',
-      room: 'ห้องเรียน 301',
-      reporter: 'วิชัย ตั้งใจ',
-      problem: 'ภาพไม่แสดงบนหน้าจอ',
-      createdAt: DateTime(2026, 10, 6),
-      status: 'ซ่อมเสร็จแล้ว',
-    ),
-    RepairRequest(
-      id: 'REP-004',
-      equipment: 'คอมพิวเตอร์ PC-05',
-      room: 'ห้องปฏิบัติการคอมพิวเตอร์',
-      reporter: 'มานี มีสุข',
-      problem: 'เมาส์ไม่ตอบสนอง',
-      createdAt: DateTime(2026, 10, 8),
-      status: 'รอดำเนินการ',
-    ),
-  ];
+  final List<RepairRequest> _requests = [];
+
+  bool _isLoading = false;
+  String? _loadError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTickets();
+  }
+
+  Future<void> _loadTickets() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
+    try {
+      final data = await ApiService.getTickets();
+
+      if (!mounted) return;
+
+      if (data == null) {
+        setState(() {
+          _loadError = 'โหลดรายการไม่สำเร็จ กรุณาตรวจสอบ Backend';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final tickets = data
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .map(_mapTicket)
+          .toList();
+
+      setState(() {
+        _requests
+          ..clear()
+          ..addAll(tickets);
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loadError = 'เกิดข้อผิดพลาดในการโหลดข้อมูล';
+        _isLoading = false;
+      });
+    }
+  }
+
+  RepairRequest _mapTicket(Map<String, dynamic> item) {
+    final rawId = item['id'];
+    final ticketId = int.tryParse(rawId.toString()) ?? 0;
+
+    final rawStatus = (item['status'] ?? 'pending').toString();
+
+    final statusMap = {
+      'pending': 'รอดำเนินการ',
+      'in_progress': 'กำลังซ่อม',
+      'completed': 'ซ่อมเสร็จแล้ว',
+      'cancelled': 'ยกเลิก',
+      'รอดำเนินการ': 'รอดำเนินการ',
+      'กำลังซ่อม': 'กำลังซ่อม',
+      'ซ่อมเสร็จแล้ว': 'ซ่อมเสร็จแล้ว',
+      'ยกเลิก': 'ยกเลิก',
+    };
+
+    final createdAt = DateTime.tryParse(
+      (item['created_at'] ?? item['createdAt'] ?? '').toString(),
+    );
+
+    return RepairRequest(
+      ticketId: ticketId,
+      id: 'REP-${ticketId.toString().padLeft(3, '0')}',
+      equipment:
+          (item['equipment_name'] ??
+                  item['device_name'] ??
+                  item['equipment'] ??
+                  item['device_code'] ??
+                  'ไม่ระบุอุปกรณ์')
+              .toString(),
+      room:
+          (item['room_number'] ??
+                  item['room'] ??
+                  item['room_name'] ??
+                  'ไม่ระบุห้อง')
+              .toString(),
+      reporter:
+          (item['reporter_name'] ??
+                  item['reporter'] ??
+                  item['user_name'] ??
+                  'ไม่ระบุผู้แจ้ง')
+              .toString(),
+      problem: (item['description'] ?? item['problem'] ?? 'ไม่ระบุรายละเอียด')
+          .toString(),
+      createdAt: createdAt ?? DateTime.now(),
+      status: statusMap[rawStatus] ?? rawStatus,
+    );
+  }
 
   final List<String> _statuses = [
     'รอดำเนินการ',
@@ -101,7 +182,11 @@ class _RepairManagementScreenState extends State<RepairManagementScreen> {
   }
 
   int _countByStatus(String status) {
-    return _requests.where((r) => r.status == status).length;
+    final apiStatus = _statusToApi(status);
+
+    return _requests.where((request) {
+      return _statusToApi(request.status) == apiStatus;
+    }).length;
   }
 
   String _formatDate(DateTime date) {
@@ -182,22 +267,39 @@ class _RepairManagementScreenState extends State<RepairManagementScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('ปิด'),
-                ),
-                FilledButton(
                   onPressed: () {
-                    setState(() {
-                      request.status = newStatus;
-                    });
-
-                    Navigator.pop(dialogContext);
-
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      const SnackBar(content: Text('อัปเดตสถานะเรียบร้อยแล้ว')),
-                    );
+                    Navigator.pop(context);
                   },
-                  child: const Text('บันทึกสถานะ'),
+                  child: const Text('ยกเลิก'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (request.ticketId <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('ไม่พบ ID ใบแจ้งซ่อมจากฐานข้อมูล'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    final success = await ApiService.updateTicketStatus(
+                      request.ticketId,
+                      _statusToApi(newStatus),
+                    );
+
+                    if (!context.mounted) return;
+
+                    if (success) {
+                      Navigator.pop(context);
+                      await _loadTickets();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('บันทึกสถานะไม่สำเร็จ')),
+                      );
+                    }
+                  },
+                  child: const Text('บันทึก'),
                 ),
               ],
             );
@@ -536,7 +638,37 @@ class _RepairManagementScreenState extends State<RepairManagementScreen> {
 
                       const SizedBox(height: 18),
 
-                      if (requests.isEmpty)
+                      if (_isLoading)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(32),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else if (_loadError != null)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.cloud_off,
+                                  size: 42,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(height: 10),
+                                Text(_loadError!),
+                                const SizedBox(height: 12),
+                                FilledButton.icon(
+                                  onPressed: _loadTickets,
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('ลองโหลดอีกครั้ง'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else if (requests.isEmpty)
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(30),
@@ -548,12 +680,12 @@ class _RepairManagementScreenState extends State<RepairManagementScreen> {
                           child: const Column(
                             children: [
                               Icon(
-                                Icons.search_off,
+                                Icons.inbox_outlined,
                                 size: 42,
                                 color: Colors.grey,
                               ),
                               SizedBox(height: 10),
-                              Text('ไม่พบรายการแจ้งซ่อม'),
+                              Text('ยังไม่มีรายการแจ้งซ่อม'),
                             ],
                           ),
                         )
@@ -570,7 +702,6 @@ class _RepairManagementScreenState extends State<RepairManagementScreen> {
     );
   }
 
-  // ช่องค้นหา
   Widget _buildSearchField() {
     return TextField(
       controller: _searchController,

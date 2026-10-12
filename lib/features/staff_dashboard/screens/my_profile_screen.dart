@@ -1,10 +1,31 @@
 import 'package:flutter/material.dart';
 
 class MyProfileScreen extends StatelessWidget {
-  const MyProfileScreen({super.key});
+  final Map<String, dynamic> user;
+
+  const MyProfileScreen({super.key, required this.user});
 
   static const Color navy = Color(0xFF172554);
   static const Color background = Color(0xFFF5F7FB);
+
+  String get userId => user['id']?.toString() ?? '-';
+  String get userName => user['name']?.toString() ?? '-';
+  String get userEmail => user['email']?.toString() ?? '-';
+
+  String get userRole {
+    final role = user['role']?.toString().toLowerCase();
+
+    switch (role) {
+      case 'staff':
+        return 'เจ้าหน้าที่';
+      case 'admin':
+        return 'ผู้ดูแลระบบ';
+      case 'user':
+        return 'ผู้ใช้งาน';
+      default:
+        return user['role']?.toString() ?? '-';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,8 +39,7 @@ class MyProfileScreen extends StatelessWidget {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final screenWidth = constraints.maxWidth;
-          final isMobile = screenWidth < 600;
+          final isMobile = constraints.maxWidth < 600;
 
           return Center(
             child: SingleChildScrollView(
@@ -47,7 +67,7 @@ class MyProfileScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Staff User',
+                        userName,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: isMobile ? 21 : 24,
@@ -56,24 +76,20 @@ class MyProfileScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      const Text(
-                        'เจ้าหน้าที่',
-                        style: TextStyle(color: Colors.grey),
+                      Text(
+                        userRole,
+                        style: const TextStyle(color: Colors.grey),
                       ),
                       const SizedBox(height: 24),
                       const Divider(),
-                      _profileItem(Icons.badge_outlined, 'รหัสผู้ใช้', 'ST001'),
+                      _profileItem(Icons.badge_outlined, 'รหัสผู้ใช้', userId),
                       _profileItem(
                         Icons.person_outline,
                         'ชื่อ-นามสกุล',
-                        'Staff User',
+                        userName,
                       ),
-                      _profileItem(
-                        Icons.email_outlined,
-                        'อีเมล',
-                        'staff@example.com',
-                      ),
-                      _profileItem(Icons.work_outline, 'บทบาท', 'เจ้าหน้าที่'),
+                      _profileItem(Icons.email_outlined, 'อีเมล', userEmail),
+                      _profileItem(Icons.work_outline, 'บทบาท', userRole),
                       _profileItem(
                         Icons.check_circle_outline,
                         'สถานะบัญชี',
@@ -81,7 +97,7 @@ class MyProfileScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 20),
                       const Text(
-                        'ข้อมูลนี้เป็นข้อมูลตัวอย่าง',
+                        'ข้อมูลจากบัญชีผู้ใช้',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.grey, fontSize: 12),
                       ),
