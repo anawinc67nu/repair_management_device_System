@@ -112,6 +112,145 @@ class ApiService {
   }
 
   // ==========================================
+  // ROOMS (จัดการห้อง - Admin/CRUD)
+  // ==========================================
+
+  static Future<List<dynamic>?> getRooms() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/rooms'),
+        headers: _headers,
+      );
+
+      print('GET ROOMS STATUS: ${response.statusCode}');
+      print('GET ROOMS BODY: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data is List) {
+          return data;
+        }
+
+        if (data is Map<String, dynamic>) {
+          if (data['rooms'] is List) {
+            return data['rooms'] as List<dynamic>;
+          }
+
+          if (data['data'] is List) {
+            return data['data'] as List<dynamic>;
+          }
+        }
+
+        print('รูปแบบข้อมูลห้องไม่ถูกต้อง');
+      }
+    } catch (e, stackTrace) {
+      print('Error getRooms: $e');
+      print(stackTrace);
+    }
+
+    return null;
+  }
+
+  static Future<bool> createRoom(Map<String, dynamic> roomData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/rooms'),
+        headers: _headers,
+        body: jsonEncode(roomData),
+      );
+      return response.statusCode == 201 || response.statusCode == 200;
+    } catch (e) {
+      print('Error createRoom: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> updateRoom(
+    String id,
+    Map<String, dynamic> roomData,
+  ) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/rooms/$id'),
+        headers: _headers,
+        body: jsonEncode(roomData),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error updateRoom: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> deleteRoom(String id) async {
+    try {
+      final response = await http.delete(Uri.parse('$baseUrl/rooms/$id'));
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error deleteRoom: $e');
+      return false;
+    }
+  }
+
+  // ==========================================
+  // EQUIPMENTS (จัดการอุปกรณ์ - Admin/CRUD)
+  // ==========================================
+
+  static Future<List<dynamic>?> getEquipments() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/equipments'));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      print('Error getEquipments: $e');
+    }
+    return null;
+  }
+
+  static Future<bool> createEquipment(Map<String, dynamic> eqData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/equipments'),
+        headers: _headers,
+        body: jsonEncode(eqData),
+      );
+      return response.statusCode == 201 || response.statusCode == 200;
+    } catch (e) {
+      print('Error createEquipment: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> updateEquipment(
+    String id,
+    Map<String, dynamic> eqData,
+  ) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/equipments/$id'),
+        headers: _headers,
+        body: jsonEncode(eqData),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error updateEquipment: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> deleteEquipment(String id) async {
+    try {
+      final response = await http.delete(Uri.parse('$baseUrl/equipments/$id'));
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error deleteEquipment: $e');
+      return false;
+    }
+  }
+
+  // ==========================================
   // ระบบการแจ้งซ่อม (Tickets)
   // ==========================================
 
