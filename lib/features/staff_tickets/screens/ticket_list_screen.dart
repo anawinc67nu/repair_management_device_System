@@ -206,7 +206,6 @@ class _TicketListScreenState extends State<TicketListScreen> {
                               children: [
                                 Text('รหัสงาน: ${ticket.id}'),
                                 Text('ลูกค้า: ${ticket.customerName}'),
-                                Text('อุปกรณ์: ${ticket.deviceName}'),
                                 const SizedBox(height: 8),
                                 Text(
                                   _statusText(ticket.status),

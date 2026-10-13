@@ -1,3 +1,4 @@
+import '../../auth/screens/login_screen.dart'; 
 enum RepairStatus {
   pending,
   accepted,
@@ -30,12 +31,15 @@ class RepairTicket {
   });
 
   // แก้ไขตรงนี้: เปลี่ยนเป็น Factory Constructor สำหรับแปลง JSON
-  factory RepairTicket.fromJson(Map<String, dynamic> json) {
+ factory RepairTicket.fromJson(Map<String, dynamic> json) {
+    print('--- DATA FROM BACKEND ---: $json');
+    final rawDeviceName = json['device_name'] ?? json['device']?['name'] ?? json['deviceName'] ?? 'ไม่ระบุอุปกรณ์';
     return RepairTicket(
       id: json['id']?.toString() ?? '',
       title: json['title'] ?? json['description'] ?? 'ไม่มีหัวข้อ',
       description: json['description'] ?? '',
-      customerName: json['reporter']?['name'] ?? json['customerName'] ?? 'ไม่ระบุชื่อ',
+      // ---> แก้ตรงนี้ให้ดึงจาก AuthService.loggedInUserEmail แทน
+      customerName: AuthService.loggedInUserEmail ?? json['reporter']?['name'] ?? json['customerName'] ?? 'ไม่ระบุชื่อ',
       deviceName: json['device']?['name'] ?? json['deviceName'] ?? 'ไม่ระบุอุปกรณ์',
       createdAt: json['created_at'] != null 
           ? DateTime.parse(json['created_at']) 

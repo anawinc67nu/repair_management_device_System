@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/repair_ticket.dart';
 import '../../../services/api_service.dart';
+import '../../auth/screens/login_screen.dart'; // หรือ path ที่ถูกต้องตามโครงสร้างโปรเจกต์ของคุณ
 
 class TicketDetailScreen extends StatefulWidget {
   final String ticketId;
@@ -168,8 +169,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                               ),
                               const Divider(height: 24),
                               _infoRow('รหัสงาน:', _ticket!.id),
-                              _infoRow('ชื่อผู้แจ้ง:', _ticket!.customerName),
-                              _infoRow('อุปกรณ์:', _ticket!.deviceName),
+                              _infoRow('ชื่อผู้แจ้ง:', AuthService.loggedInUserEmail ?? _ticket!.customerName),
                               _infoRow('รายละเอียดปัญหา:', _ticket!.description),
                               _infoRow(
                                 'วันที่แจ้ง:',

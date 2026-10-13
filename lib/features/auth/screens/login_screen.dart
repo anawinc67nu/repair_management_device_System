@@ -11,6 +11,9 @@ class LoginScreen extends StatefulWidget {
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
+class AuthService {
+  static String? loggedInUserEmail;
+}
 
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
@@ -39,6 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (!mounted) return;
+      AuthService.loggedInUserEmail = _emailController.text.trim();
 
       setState(() {
         _isLoading = false;
