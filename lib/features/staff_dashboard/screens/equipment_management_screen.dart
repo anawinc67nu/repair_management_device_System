@@ -101,228 +101,6 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
     super.dispose();
   }
 
-  void _showEquipmentForm({Map<String, String>? equipment}) {
-    final isEditing = equipment != null;
-    final formKey = GlobalKey<FormState>();
-
-    final idController = TextEditingController(text: equipment?['id'] ?? '');
-    final nameController = TextEditingController(
-      text: equipment?['name'] ?? '',
-    );
-
-    String room = equipment?['room'] ?? _rooms.first;
-    String category = equipment?['category'] ?? 'คอมพิวเตอร์';
-    String status = equipment?['status'] ?? 'พร้อมใช้งาน';
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text(isEditing ? 'แก้ไขข้อมูลอุปกรณ์' : 'เพิ่มอุปกรณ์'),
-              content: SizedBox(
-                width: 430,
-                child: SingleChildScrollView(
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextFormField(
-                          controller: idController,
-                          enabled: !isEditing,
-                          decoration: const InputDecoration(
-                            labelText: 'รหัสอุปกรณ์',
-                            hintText: 'เช่น EQ004',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'กรุณากรอกรหัสอุปกรณ์';
-                            }
-
-                            final duplicate = _equipment.any(
-                              (item) =>
-                                  item['id']!.toLowerCase() ==
-                                      value.trim().toLowerCase() &&
-                                  item['id'] != equipment?['id'],
-                            );
-
-                            if (duplicate) {
-                              return 'รหัสอุปกรณ์นี้มีแล้ว';
-                            }
-
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: nameController,
-                          decoration: const InputDecoration(
-                            labelText: 'ชื่ออุปกรณ์',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                              ? 'กรุณากรอกชื่ออุปกรณ์'
-                              : null,
-                        ),
-                        const SizedBox(height: 14),
-                        DropdownButtonFormField<String>(
-                          value: category,
-                          decoration: const InputDecoration(
-                            labelText: 'ประเภทอุปกรณ์',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'คอมพิวเตอร์',
-                              child: Text('คอมพิวเตอร์'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'อุปกรณ์นำเสนอ',
-                              child: Text('อุปกรณ์นำเสนอ'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'เครื่องใช้ไฟฟ้า',
-                              child: Text('เครื่องใช้ไฟฟ้า'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'อุปกรณ์เครือข่าย',
-                              child: Text('อุปกรณ์เครือข่าย'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'อื่น ๆ',
-                              child: Text('อื่น ๆ'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setDialogState(() => category = value);
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        DropdownButtonFormField<String>(
-                          value: room,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'ห้องที่ติดตั้ง',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: _rooms.map((name) {
-                            return DropdownMenuItem(
-                              value: name,
-                              child: Text(
-                                name,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setDialogState(() => room = value);
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        DropdownButtonFormField<String>(
-                          value: status,
-                          decoration: const InputDecoration(
-                            labelText: 'สถานะอุปกรณ์',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'พร้อมใช้งาน',
-                              child: Text('พร้อมใช้งาน'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'ชำรุด',
-                              child: Text('ชำรุด'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'กำลังซ่อม',
-                              child: Text('กำลังซ่อม'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setDialogState(() => status = value);
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('ยกเลิก'),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: navy),
-                  onPressed: () async {
-                    if (!formKey.currentState!.validate()) return;
-
-                    final data = <String, String>{
-                      'id': idController.text.trim(),
-                      'name': nameController.text.trim(),
-                      'room': room,
-                      'category': category,
-                      'status': status,
-                    };
-
-                    final payload = <String, dynamic>{
-                      'id': data['id'],
-                      'name': data['name'],
-                      'room': data['room'],
-                      'category': data['category'],
-                      'status': data['status'],
-                    };
-                    final ok = isEditing
-                        ? await ApiService.updateEquipment(
-                            equipment['id']!,
-                            payload,
-                          )
-                        : await ApiService.createEquipment(payload);
-                    if (!dialogContext.mounted) return;
-                    if (!ok) {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'บันทึกข้อมูลอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบ API',
-                          ),
-                        ),
-                      );
-                      return;
-                    }
-                    Navigator.pop(dialogContext);
-                    await _loadData();
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          isEditing
-                              ? 'แก้ไขข้อมูลอุปกรณ์แล้ว'
-                              : 'เพิ่มอุปกรณ์แล้ว',
-                        ),
-                      ),
-                    );
-                  },
-                  child: Text(isEditing ? 'บันทึก' : 'เพิ่มอุปกรณ์'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
   Future<void> _deleteEquipment(Map<String, String> equipment) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -361,16 +139,6 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final items = _filteredEquipment;
-
-    final readyCount = _equipment
-        .where((item) => item['status'] == 'พร้อมใช้งาน')
-        .length;
-    final brokenCount = _equipment
-        .where((item) => item['status'] == 'ชำรุด')
-        .length;
-    final repairCount = _equipment
-        .where((item) => item['status'] == 'กำลังซ่อม')
-        .length;
 
     return Scaffold(
       backgroundColor: pageBackground,
@@ -420,71 +188,6 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
                           '$_loadError — กดรีเฟรชเพื่อลองอีกครั้ง',
                           style: const TextStyle(color: Colors.red),
                         ),
-                      const Text(
-                        'จัดการข้อมูลอุปกรณ์',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: navy,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'เพิ่ม แก้ไข ค้นหา และตรวจสอบสถานะอุปกรณ์',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // การ์ดสรุปสถานะอุปกรณ์
-                      LayoutBuilder(
-                        builder: (context, cardConstraints) {
-                          final availableWidth = cardConstraints.maxWidth;
-                          final columns = availableWidth >= 900
-                              ? 3
-                              : availableWidth >= 480
-                              ? 2
-                              : 1;
-
-                          const spacing = 12.0;
-                          final cardWidth =
-                              (availableWidth - spacing * (columns - 1)) /
-                              columns;
-
-                          return Wrap(
-                            spacing: spacing,
-                            runSpacing: spacing,
-                            children: [
-                              SizedBox(
-                                width: cardWidth,
-                                child: _summaryCard(
-                                  'พร้อมใช้งาน',
-                                  '$readyCount',
-                                  Icons.check_circle_outline,
-                                  Colors.green,
-                                ),
-                              ),
-                              SizedBox(
-                                width: cardWidth,
-                                child: _summaryCard(
-                                  'ชำรุด',
-                                  '$brokenCount',
-                                  Icons.error_outline,
-                                  Colors.red,
-                                ),
-                              ),
-                              SizedBox(
-                                width: cardWidth,
-                                child: _summaryCard(
-                                  'กำลังซ่อม',
-                                  '$repairCount',
-                                  Icons.build_outlined,
-                                  Colors.orange,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
 
                       const SizedBox(height: 24),
 
@@ -510,14 +213,6 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                     color: navy,
-                                  ),
-                                ),
-                                FilledButton.icon(
-                                  onPressed: () => _showEquipmentForm(),
-                                  icon: const Icon(Icons.add),
-                                  label: const Text('เพิ่มอุปกรณ์'),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: navy,
                                   ),
                                 ),
                               ],
@@ -618,19 +313,11 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
                                             ),
                                             PopupMenuButton<String>(
                                               onSelected: (value) {
-                                                if (value == 'edit') {
-                                                  _showEquipmentForm(
-                                                    equipment: item,
-                                                  );
-                                                } else if (value == 'delete') {
+                                                if (value == 'delete') {
                                                   _deleteEquipment(item);
                                                 }
                                               },
                                               itemBuilder: (context) => const [
-                                                PopupMenuItem(
-                                                  value: 'edit',
-                                                  child: Text('แก้ไข'),
-                                                ),
                                                 PopupMenuItem(
                                                   value: 'delete',
                                                   child: Text('ลบ'),
@@ -716,17 +403,6 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               IconButton(
-                                                tooltip: 'แก้ไข',
-                                                onPressed: () =>
-                                                    _showEquipmentForm(
-                                                      equipment: item,
-                                                    ),
-                                                icon: const Icon(
-                                                  Icons.edit_outlined,
-                                                  color: Colors.blue,
-                                                ),
-                                              ),
-                                              IconButton(
                                                 tooltip: 'ลบ',
                                                 onPressed: () =>
                                                     _deleteEquipment(item),
@@ -779,48 +455,6 @@ class _EquipmentManagementScreenState extends State<EquipmentManagementScreen> {
         ),
         Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
       ],
-    );
-  }
-
-  Widget _summaryCard(String title, String count, IconData icon, Color color) {
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 30),
-          const SizedBox(height: 14),
-          Text(title, style: const TextStyle(color: Colors.grey)),
-          const SizedBox(height: 6),
-          Text(
-            count,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statusChip(String status, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
     );
   }
 }

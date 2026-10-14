@@ -43,7 +43,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
         'building': (item['building'] ?? item['building_name'] ?? '')
             .toString(),
         'type': (item['type'] ?? item['room_type'] ?? 'ห้องเรียน').toString(),
-        'status': (item['status'] ?? 'เปิดใช้งาน').toString(),
       };
     }).toList();
     setState(() {
@@ -73,200 +72,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  void _showRoomForm({Map<String, String>? room}) {
-    final isEditing = room != null;
-    final formKey = GlobalKey<FormState>();
-
-    final idController = TextEditingController(text: room?['id'] ?? '');
-    final nameController = TextEditingController(text: room?['name'] ?? '');
-    final buildingController = TextEditingController(
-      text: room?['building'] ?? '',
-    );
-
-    String type = room?['type'] ?? 'ห้องเรียน';
-    String status = room?['status'] ?? 'เปิดใช้งาน';
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text(isEditing ? 'แก้ไขข้อมูลห้อง' : 'เพิ่มห้องใหม่'),
-              content: SizedBox(
-                width: 420,
-                child: SingleChildScrollView(
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextFormField(
-                          controller: idController,
-                          enabled: !isEditing,
-                          decoration: const InputDecoration(
-                            labelText: 'รหัสห้อง',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'กรุณากรอกรหัสห้อง';
-                            }
-
-                            final duplicate = _rooms.any(
-                              (item) =>
-                                  item['id']!.toLowerCase() ==
-                                      value.trim().toLowerCase() &&
-                                  item['id'] != room?['id'],
-                            );
-
-                            if (duplicate) return 'รหัสห้องนี้มีแล้ว';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: nameController,
-                          decoration: const InputDecoration(
-                            labelText: 'ชื่อห้อง',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                              ? 'กรุณากรอกชื่อห้อง'
-                              : null,
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: buildingController,
-                          decoration: const InputDecoration(
-                            labelText: 'อาคาร',
-                            hintText: 'เช่น อาคาร 1',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                              ? 'กรุณากรอกอาคาร'
-                              : null,
-                        ),
-                        const SizedBox(height: 14),
-                        DropdownButtonFormField<String>(
-                          value: type,
-                          decoration: const InputDecoration(
-                            labelText: 'ประเภทห้อง',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'ห้องเรียน',
-                              child: Text('ห้องเรียน'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'ห้องปฏิบัติการ',
-                              child: Text('ห้องปฏิบัติการ'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'ห้องประชุม',
-                              child: Text('ห้องประชุม'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'ห้องสำนักงาน',
-                              child: Text('ห้องสำนักงาน'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setDialogState(() => type = value);
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        DropdownButtonFormField<String>(
-                          value: status,
-                          decoration: const InputDecoration(
-                            labelText: 'สถานะ',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'เปิดใช้งาน',
-                              child: Text('เปิดใช้งาน'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'ปิดใช้งาน',
-                              child: Text('ปิดใช้งาน'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setDialogState(() => status = value);
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('ยกเลิก'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    if (!formKey.currentState!.validate()) return;
-
-                    final data = <String, String>{
-                      'id': idController.text.trim(),
-                      'name': nameController.text.trim(),
-                      'building': buildingController.text.trim(),
-                      'type': type,
-                      'status': status,
-                    };
-
-                    final payload = <String, dynamic>{
-                      'id': data['id'],
-                      'name': data['name'],
-                      'building': data['building'],
-                      'type': data['type'],
-                      'status': data['status'],
-                    };
-                    final ok = isEditing
-                        ? await ApiService.updateRoom(room['id']!, payload)
-                        : await ApiService.createRoom(payload);
-                    if (!dialogContext.mounted) return;
-                    if (!ok) {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'บันทึกข้อมูลห้องไม่สำเร็จ กรุณาตรวจสอบ API',
-                          ),
-                        ),
-                      );
-                      return;
-                    }
-                    Navigator.pop(dialogContext);
-                    await _loadRooms();
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          isEditing ? 'แก้ไขข้อมูลห้องแล้ว' : 'เพิ่มห้องแล้ว',
-                        ),
-                      ),
-                    );
-                  },
-                  child: Text(isEditing ? 'บันทึก' : 'เพิ่มห้อง'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
   }
 
   Future<void> _deleteRoom(Map<String, String> room) async {
@@ -364,7 +169,7 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'เพิ่ม แก้ไข ค้นหา และตรวจสอบสถานะห้องภายในระบบ',
+                        'ค้นหา และตรวจสอบห้องภายในระบบ',
                         style: TextStyle(color: Colors.grey),
                       ),
                       const SizedBox(height: 24),
@@ -397,24 +202,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                                   Colors.blue,
                                 ),
                               ),
-                              SizedBox(
-                                width: cardWidth,
-                                child: _infoCard(
-                                  'เปิดใช้งาน',
-                                  '${_rooms.where((r) => r['status'] == 'เปิดใช้งาน').length}',
-                                  Icons.check_circle,
-                                  Colors.green,
-                                ),
-                              ),
-                              SizedBox(
-                                width: cardWidth,
-                                child: _infoCard(
-                                  'ปิดใช้งาน',
-                                  '${_rooms.where((r) => r['status'] == 'ปิดใช้งาน').length}',
-                                  Icons.pause_circle,
-                                  Colors.orange,
-                                ),
-                              ),
                             ],
                           );
                         },
@@ -443,14 +230,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                                   style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                FilledButton.icon(
-                                  onPressed: () => _showRoomForm(),
-                                  icon: const Icon(Icons.add),
-                                  label: const Text('เพิ่มห้อง'),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: navy,
                                   ),
                                 ),
                               ],
@@ -491,8 +270,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                               // มือถือแสดงเป็นการ์ด ไม่ต้องเลื่อนตารางแนวนอน
                               Column(
                                 children: rooms.map((room) {
-                                  final active = room['status'] == 'เปิดใช้งาน';
-
                                   return Container(
                                     width: double.infinity,
                                     margin: const EdgeInsets.only(bottom: 12),
@@ -545,17 +322,11 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                                             PopupMenuButton<String>(
                                               tooltip: 'จัดการห้อง',
                                               onSelected: (value) {
-                                                if (value == 'edit') {
-                                                  _showRoomForm(room: room);
-                                                } else if (value == 'delete') {
+                                                if (value == 'delete') {
                                                   _deleteRoom(room);
                                                 }
                                               },
                                               itemBuilder: (context) => const [
-                                                PopupMenuItem(
-                                                  value: 'edit',
-                                                  child: Text('แก้ไข'),
-                                                ),
                                                 PopupMenuItem(
                                                   value: 'delete',
                                                   child: Text('ลบ'),
@@ -573,11 +344,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                                         _mobileRoomDetail(
                                           'ประเภทห้อง',
                                           room['type']!,
-                                        ),
-                                        const SizedBox(height: 12),
-                                        _statusChip(
-                                          room['status']!,
-                                          active ? Colors.green : Colors.orange,
                                         ),
                                       ],
                                     ),
@@ -598,9 +364,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                                     DataColumn(label: Text('จัดการ')),
                                   ],
                                   rows: rooms.map((room) {
-                                    final active =
-                                        room['status'] == 'เปิดใช้งาน';
-
                                     return DataRow(
                                       cells: [
                                         DataCell(Text(room['id']!)),
@@ -618,26 +381,9 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                                         DataCell(Text(room['building']!)),
                                         DataCell(Text(room['type']!)),
                                         DataCell(
-                                          _statusChip(
-                                            room['status']!,
-                                            active
-                                                ? Colors.green
-                                                : Colors.orange,
-                                          ),
-                                        ),
-                                        DataCell(
                                           Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              IconButton(
-                                                tooltip: 'แก้ไข',
-                                                onPressed: () =>
-                                                    _showRoomForm(room: room),
-                                                icon: const Icon(
-                                                  Icons.edit_outlined,
-                                                  color: Colors.blue,
-                                                ),
-                                              ),
                                               IconButton(
                                                 tooltip: 'ลบ',
                                                 onPressed: () =>
@@ -711,24 +457,6 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
             style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _statusChip(String status, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }
