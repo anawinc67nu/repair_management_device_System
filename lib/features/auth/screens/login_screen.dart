@@ -158,12 +158,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    'บัญชีสำหรับทดลอง\n'
-                    'User: user@test.com / 123\n'
-                    'Staff: staff@test.com / 123',
-                    textAlign: TextAlign.center,
-                  ),
                 ],
               ),
             ),
